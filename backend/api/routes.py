@@ -53,6 +53,7 @@ async def upload(request: Request, files: list[UploadFile] = File(...), name: st
 @router.get("/jobs/{job_id}")
 async def job_status(request: Request, job_id: str) -> dict:
     enforce_rate_limit(request)
+async def job_status(job_id: str) -> dict:
     result = AsyncResult(job_id)
     return {"job_id": job_id, "status": result.status, "result": result.result if result.ready() else None}
 
@@ -62,6 +63,9 @@ async def recognize(request: Request, db: AsyncSession = Depends(get_db), file: 
     enforce_rate_limit(request)
     data = await run_inference(await file.read())
     hits = client.search(collection_name=settings.face_collection, query_vector=data.face_embedding, limit=top_k)
+async def recognize(db: AsyncSession = Depends(get_db), file: UploadFile = File(...), top_k: int = Form(default=5)) -> RecognizeResponse:
+    data = await run_inference(await file.read())
+    hits = client.search(collection_name=settings.face_collection, query_vector=data["face_embedding"], limit=top_k)
     matches = []
     for hit in hits:
         person_name = "unknown"
@@ -77,6 +81,7 @@ async def recognize(request: Request, db: AsyncSession = Depends(get_db), file: 
 @router.get("/search", response_model=SearchResponse)
 async def search(request: Request, q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
     enforce_rate_limit(request)
+async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
     vec = await embed_text(q)
     hits = client.search(collection_name=settings.semantic_collection, query_vector=vec, limit=limit)
     return SearchResponse(
@@ -88,4 +93,5 @@ async def search(request: Request, q: str = Query(..., min_length=1), limit: int
 @router.get("/cluster/suggestions")
 async def cluster_suggestions(request: Request) -> dict:
     enforce_rate_limit(request)
+async def cluster_suggestions() -> dict:
     return {"thresholds": {"auto_attach": settings.face_auto_attach_threshold, "suggest_merge": settings.face_suggest_merge_threshold}}
