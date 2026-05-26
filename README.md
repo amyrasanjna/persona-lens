@@ -24,6 +24,7 @@ docker compose up --build
 - `GET /cluster/suggestions`
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /health`
 
 ## Production checklist
 - Set strong API key and rotate regularly
