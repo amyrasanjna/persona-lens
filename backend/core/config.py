@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     max_upload_files: int = 10
     max_upload_size_mb: int = 20
+    rate_limit_per_minute: int = 120
 
 
 settings = Settings()

@@ -22,6 +22,8 @@ docker compose up --build
 - `POST /recognize` HF infer + Qdrant face search
 - `GET /search` HF text embed + Qdrant semantic search
 - `GET /cluster/suggestions`
+- `GET /health/live`
+- `GET /health/ready`
 - `GET /health`
 
 ## Production checklist
@@ -30,3 +32,16 @@ docker compose up --build
 - Attach managed Postgres/Qdrant/Redis
 - Run multiple API and worker replicas
 - Add Alembic migrations before schema changes
+
+
+## Migrations
+Run database migrations before starting API:
+```bash
+alembic upgrade head
+```
+
+- In-app fallback rate limiting is enabled per-IP (for best results still enforce gateway rate limits).
+
+- Rate limiting uses Redis for cross-replica consistency.
+- API key comparison uses constant-time digest check.
+- HF inference responses are schema-validated with Pydantic.

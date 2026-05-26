@@ -2,11 +2,13 @@ from pathlib import Path
 import uuid
 
 from celery.result import AsyncResult
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.core.rate_limit import enforce_rate_limit
 from backend.core.security import require_api_key
 from backend.database.session import get_db
 from backend.models.entities import Person
@@ -18,6 +20,20 @@ from backend.workers.tasks import process_upload
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
+@router.get("/health/live")
+async def live() -> dict:
+    return {"status": "live"}
+
+
+@router.get("/health/ready")
+async def ready(db: AsyncSession = Depends(get_db)) -> dict:
+    await db.execute(text("SELECT 1"))
+    return {"status": "ready"}
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload(request: Request, files: list[UploadFile] = File(...), name: str | None = Form(default=None)) -> UploadResponse:
+    enforce_rate_limit(request)
 @router.get("/health")
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
     await db.execute(text("SELECT 1"))
@@ -44,12 +60,18 @@ async def upload(files: list[UploadFile] = File(...), name: str | None = Form(de
 
 
 @router.get("/jobs/{job_id}")
+async def job_status(request: Request, job_id: str) -> dict:
+    enforce_rate_limit(request)
 async def job_status(job_id: str) -> dict:
     result = AsyncResult(job_id)
     return {"job_id": job_id, "status": result.status, "result": result.result if result.ready() else None}
 
 
 @router.post("/recognize", response_model=RecognizeResponse)
+async def recognize(request: Request, db: AsyncSession = Depends(get_db), file: UploadFile = File(...), top_k: int = Form(default=5)) -> RecognizeResponse:
+    enforce_rate_limit(request)
+    data = await run_inference(await file.read())
+    hits = client.search(collection_name=settings.face_collection, query_vector=data.face_embedding, limit=top_k)
 async def recognize(db: AsyncSession = Depends(get_db), file: UploadFile = File(...), top_k: int = Form(default=5)) -> RecognizeResponse:
     data = await run_inference(await file.read())
     hits = client.search(collection_name=settings.face_collection, query_vector=data["face_embedding"], limit=top_k)
@@ -66,6 +88,8 @@ async def recognize(db: AsyncSession = Depends(get_db), file: UploadFile = File(
 
 
 @router.get("/search", response_model=SearchResponse)
+async def search(request: Request, q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
+    enforce_rate_limit(request)
 async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
     vec = await embed_text(q)
     hits = client.search(collection_name=settings.semantic_collection, query_vector=vec, limit=limit)
@@ -76,5 +100,7 @@ async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1,
 
 
 @router.get("/cluster/suggestions")
+async def cluster_suggestions(request: Request) -> dict:
+    enforce_rate_limit(request)
 async def cluster_suggestions() -> dict:
     return {"thresholds": {"auto_attach": settings.face_auto_attach_threshold, "suggest_merge": settings.face_suggest_merge_threshold}}
