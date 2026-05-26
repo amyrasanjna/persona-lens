@@ -45,3 +45,7 @@ alembic upgrade head
 - Rate limiting uses Redis for cross-replica consistency.
 - API key comparison uses constant-time digest check.
 - HF inference responses are schema-validated with Pydantic.
+
+
+## Quick PR Trigger
+- Minor docs update to trigger a fresh PR/CI cycle when needed.
