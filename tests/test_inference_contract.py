@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("httpx")
+
 from backend.services.inference import InferPayload, TextEmbedPayload
 
 

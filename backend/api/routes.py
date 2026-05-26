@@ -3,7 +3,6 @@ import uuid
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,14 +33,6 @@ async def ready(db: AsyncSession = Depends(get_db)) -> dict:
 @router.post("/upload", response_model=UploadResponse)
 async def upload(request: Request, files: list[UploadFile] = File(...), name: str | None = Form(default=None)) -> UploadResponse:
     enforce_rate_limit(request)
-@router.get("/health")
-async def health(db: AsyncSession = Depends(get_db)) -> dict:
-    await db.execute(text("SELECT 1"))
-    return {"status": "ok"}
-
-
-@router.post("/upload", response_model=UploadResponse)
-async def upload(files: list[UploadFile] = File(...), name: str | None = Form(default=None)) -> UploadResponse:
     if len(files) > settings.max_upload_files:
         raise HTTPException(status_code=400, detail="Too many files")
     batch_id = str(uuid.uuid4())
