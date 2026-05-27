@@ -35,9 +35,11 @@ async def upload(request: Request, files: list[UploadFile] = File(...), name: st
     enforce_rate_limit(request)
     if len(files) > settings.max_upload_files:
         raise HTTPException(status_code=400, detail="Too many files")
+
     batch_id = str(uuid.uuid4())
     storage = Path("storage/originals") / batch_id
     storage.mkdir(parents=True, exist_ok=True)
+
     saved = []
     for file in files:
         content = await file.read()
@@ -46,6 +48,7 @@ async def upload(request: Request, files: list[UploadFile] = File(...), name: st
         target = storage / (file.filename or f"{uuid.uuid4().hex}.jpg")
         target.write_bytes(content)
         saved.append({"path": str(target), "name": name})
+
     job = process_upload.delay({"batch_id": batch_id, "files": saved, "name": name})
     return UploadResponse(job_id=job.id, accepted=len(saved))
 
@@ -53,19 +56,21 @@ async def upload(request: Request, files: list[UploadFile] = File(...), name: st
 @router.get("/jobs/{job_id}")
 async def job_status(request: Request, job_id: str) -> dict:
     enforce_rate_limit(request)
-async def job_status(job_id: str) -> dict:
     result = AsyncResult(job_id)
     return {"job_id": job_id, "status": result.status, "result": result.result if result.ready() else None}
 
 
 @router.post("/recognize", response_model=RecognizeResponse)
-async def recognize(request: Request, db: AsyncSession = Depends(get_db), file: UploadFile = File(...), top_k: int = Form(default=5)) -> RecognizeResponse:
+async def recognize(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+    top_k: int = Form(default=5),
+) -> RecognizeResponse:
     enforce_rate_limit(request)
     data = await run_inference(await file.read())
     hits = client.search(collection_name=settings.face_collection, query_vector=data.face_embedding, limit=top_k)
-async def recognize(db: AsyncSession = Depends(get_db), file: UploadFile = File(...), top_k: int = Form(default=5)) -> RecognizeResponse:
-    data = await run_inference(await file.read())
-    hits = client.search(collection_name=settings.face_collection, query_vector=data["face_embedding"], limit=top_k)
+
     matches = []
     for hit in hits:
         person_name = "unknown"
@@ -81,17 +86,27 @@ async def recognize(db: AsyncSession = Depends(get_db), file: UploadFile = File(
 @router.get("/search", response_model=SearchResponse)
 async def search(request: Request, q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
     enforce_rate_limit(request)
-async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> SearchResponse:
     vec = await embed_text(q)
     hits = client.search(collection_name=settings.semantic_collection, query_vector=vec, limit=limit)
     return SearchResponse(
         query=q,
-        results=[{"image_id": (h.payload or {}).get("image_id"), "person_id": (h.payload or {}).get("person_id"), "score": round(float(h.score), 4)} for h in hits],
+        results=[
+            {
+                "image_id": (h.payload or {}).get("image_id"),
+                "person_id": (h.payload or {}).get("person_id"),
+                "score": round(float(h.score), 4),
+            }
+            for h in hits
+        ],
     )
 
 
 @router.get("/cluster/suggestions")
 async def cluster_suggestions(request: Request) -> dict:
     enforce_rate_limit(request)
-async def cluster_suggestions() -> dict:
-    return {"thresholds": {"auto_attach": settings.face_auto_attach_threshold, "suggest_merge": settings.face_suggest_merge_threshold}}
+    return {
+        "thresholds": {
+            "auto_attach": settings.face_auto_attach_threshold,
+            "suggest_merge": settings.face_suggest_merge_threshold,
+        }
+    }

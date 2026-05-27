@@ -11,5 +11,9 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://u:p@localhost:5432/d
 os.environ.setdefault("QDRANT_URL", "http://localhost:6333")
 os.environ.setdefault("QDRANT_API_KEY", "test-key")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+
+redis_url = os.environ.get("REDIS_URL", "")
+if not redis_url.startswith(("redis://", "rediss://", "unix://")):
+    os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 os.environ.setdefault("HF_SPACE_URL", "http://localhost:7860")
 os.environ.setdefault("API_KEY", "test-api-key")
